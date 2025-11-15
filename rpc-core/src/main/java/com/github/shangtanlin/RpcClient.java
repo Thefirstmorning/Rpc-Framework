@@ -5,12 +5,14 @@ import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.handler.timeout.IdleStateHandler;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class RpcClient {
@@ -99,9 +101,14 @@ public class RpcClient {
                     @Override
                     public void initChannel(SocketChannel ch) throws Exception {
                         ch.pipeline()
+                                // (*** 新增 ***)
+                                // IdleStateHandler: 30秒内未发送任何数据(写空闲)，触发 userEventTriggered
+                                .addLast(new IdleStateHandler(0, 30, 0, TimeUnit.SECONDS))
                                 .addLast(new RpcDecoder()) // 入站：解码
                                 .addLast(new RpcEncoder()) // 出站：编码
-                                .addLast(new RpcClientHandler()); // 入站：处理响应
+                                // (*** 新增 ***)
+                                .addLast(new HeartbeatClientHandler()) // 心跳处理器
+                                .addLast(new RpcClientHandler()); // 业务处理器
                     }
                 });
 

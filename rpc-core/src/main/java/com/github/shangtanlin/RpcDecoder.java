@@ -39,11 +39,26 @@ public class RpcDecoder extends ReplayingDecoder<Void> {
         // 6. 读取数据长度 (4 bytes)
         int dataLength = in.readInt();
 
-        // 7. 读取数据体 (N bytes)
+        // 7. (*** 新增 ***) 处理心跳包
+        if (messageType == 3) { // 3: PING
+            out.add(HeartbeatPacket.PING);
+            return; // PING 没有数据体，直接返回
+        }
+        if (messageType == 4) { // 4: PONG
+            out.add(HeartbeatPacket.PONG);
+            return; // PONG 没有数据体，直接返回
+        }
+
+        // 8. (*** 修改点 ***) 处理 RpcRequest / RpcResponse
+        if (dataLength <= 0) {
+            // (非心跳包，但数据长度为0，可能是个无效包)
+            return;
+        }
+
         byte[] body = new byte[dataLength];
         in.readBytes(body);
 
-        // 8. 反序列化
+        // 9. 反序列化
         Class<?> clazz = (messageType == 1) ? RpcRequest.class : RpcResponse.class;
         Object obj = serializer.deserialize(body, clazz);
 
