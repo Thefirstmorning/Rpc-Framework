@@ -9,7 +9,7 @@
     <maven.compiler.target>1.8</maven.compiler.target>
     <netty.version>4.1.65.Final</netty.version>
     <kryo.version>4.0.2</kryo.version>
-
+    <curator.version>5.1.0</curator.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
 
@@ -39,6 +39,18 @@
           <version>1.7.30</version>
           <scope>runtime</scope>
         </dependency>
+
+      <dependency>
+        <groupId>org.apache.curator</groupId>
+        <artifactId>curator-recipes</artifactId>
+        <version>${curator.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.apache.zookeeper</groupId>
+        <artifactId>zookeeper</artifactId>
+        <version>3.6.3</version>
+      </dependency>
     </dependencies>
   </dependencyManagement>
 
@@ -55,6 +67,8 @@
     <module>example-provider</module>
     <module>example-consumer</module>
     <module>example-api</module>
+      <module>rpc-registry</module>
+    <module>rpc-loadbalancer</module>
   </modules>
 
 

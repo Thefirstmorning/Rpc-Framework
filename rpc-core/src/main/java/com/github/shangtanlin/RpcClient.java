@@ -10,12 +10,16 @@ import io.netty.handler.timeout.IdleStateHandler;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class RpcClient {
+
+    private Registry registry; // *** 新增 ***
+    private LoadBalancer loadBalancer; // *** 新增 ***
 
     private final EventLoopGroup group = new NioEventLoopGroup();
     // 存储 Channel，(host:port -> Channel)
@@ -28,32 +32,50 @@ public class RpcClient {
     // 用于生成全局唯一的 requestId
     private static final AtomicInteger REQUEST_ID_GENERATOR = new AtomicInteger(1);
 
+    // *** 构造函数修改 ***
+    public RpcClient(Registry registry, LoadBalancer loadBalancer) {
+        this.registry = registry;
+        this.loadBalancer = loadBalancer;
+        // ... (其他初始化)
+    }
+
+    // *** getProxy 方法修改 (核心！) ***
+    // (不再需要 host 和 port)
     @SuppressWarnings("unchecked")
-    public <T> T getProxy(Class<T> serviceClass, String host, int port) {
+    public <T> T getProxy(Class<T> serviceClass) {
         return (T) Proxy.newProxyInstance(
                 serviceClass.getClassLoader(),
                 new Class<?>[]{serviceClass},
-                new RpcInvocationHandler(host, port, serviceClass)
+                new RpcInvocationHandler(serviceClass) // 传入 serviceClass
         );
     }
 
     private class RpcInvocationHandler implements InvocationHandler {
-        private final String host;
-        private final int port;
         private final Class<?> serviceClass;
 
-        public RpcInvocationHandler(String host, int port, Class<?> serviceClass) {
-            this.host = host;
-            this.port = port;
+        public RpcInvocationHandler(Class<?> serviceClass) {
             this.serviceClass = serviceClass;
         }
 
         @Override
         public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-            // 1. 获取或创建 Channel
+            // *** 1. 服务发现 (新增) ***
+            String serviceName = serviceClass.getName();
+            List<String> addresses = registry.discover(serviceName);
+            if (addresses == null || addresses.isEmpty()) {
+                throw new RuntimeException("没有可用的服务: " + serviceName);
+            }
+
+            // *** 2. 负载均衡 (新增) ***
+            String targetAddress = loadBalancer.select(addresses); // e.g., "127.0.0.1:8080"
+            String[] hostPort = targetAddress.split(":");
+            String host = hostPort[0];
+            int port = Integer.parseInt(hostPort[1]);
+
+            // *** 3. 获取 Channel (现在是动态的) ***
             Channel channel = getOrCreateChannel(host, port);
 
-            // 2. 创建 RpcRequest
+            // 4. 创建 RpcRequest
             RpcRequest request = new RpcRequest();
             request.setRequestId(REQUEST_ID_GENERATOR.getAndIncrement()); // 获取唯一ID
             request.setInterfaceName(serviceClass.getName());
@@ -61,20 +83,19 @@ public class RpcClient {
             request.setParameterTypes(method.getParameterTypes());
             request.setParameters(args);
 
-            // 3. 创建一个 CompletableFuture 来等待异步结果
+            // 5. 创建一个 CompletableFuture 来等待异步结果
             CompletableFuture<RpcResponse> future = new CompletableFuture<>();
             PENDING_FUTURES.put(request.getRequestId(), future);
 
-            // 4. 发送 RpcRequest (异步)
+            // 6. 发送 RpcRequest (异步)
             channel.writeAndFlush(request);
+            System.out.println("客户端发起调用 (to " + targetAddress + "): " + request);
 
-            System.out.println("客户端发起调用: " + request);
-
-            // 5. 阻塞等待结果 (同步等待异步)
+            // 7. 阻塞等待结果 (同步等待异步)
             // (可以设置超时)
             RpcResponse response = future.get(); // .get(5, TimeUnit.SECONDS);
 
-            // 6. 处理响应
+            // 8. 处理响应
             if (response.hasException()) {
                 throw response.getException();
             } else {
