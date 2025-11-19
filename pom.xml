@@ -10,6 +10,7 @@
     <netty.version>4.1.65.Final</netty.version>
     <kryo.version>4.0.2</kryo.version>
     <curator.version>5.1.0</curator.version>
+    <spring-boot.version>2.7.14</spring-boot.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
 
@@ -51,6 +52,14 @@
         <artifactId>zookeeper</artifactId>
         <version>3.6.3</version>
       </dependency>
+
+      <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-dependencies</artifactId>
+        <version>${spring-boot.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
     </dependencies>
   </dependencyManagement>
 
@@ -69,6 +78,7 @@
     <module>example-api</module>
       <module>rpc-registry</module>
     <module>rpc-loadbalancer</module>
+    <module>rpc-spring-boot-starter</module>
   </modules>
 
 
